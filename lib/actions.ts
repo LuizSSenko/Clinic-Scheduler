@@ -5,8 +5,9 @@ import { z } from "zod"
 import { v4 as uuidv4 } from "uuid"
 import type { ClinicSettings, Appointment, BlockedTime } from "./types"
 import { kv } from "./kv"
+import { parseISO, isBefore } from "date-fns"
 
-// Schema for appointment creation
+// Schema for appointment creation with updated validation
 const AppointmentSchema = z.object({
   userName: z.string().min(1, "Name is required"),
   userEmail: z.string().email("Invalid email address"),
@@ -17,7 +18,7 @@ const AppointmentSchema = z.object({
     .string()
     .optional()
     .transform((val) => val === "true"),
-  emergencyReason: z.string().optional(),
+  emergencyReason: z.string().optional().default(""),
 })
 
 // Schema for blocked time creation
@@ -62,7 +63,7 @@ async function initializeClinicSettings() {
   return settings
 }
 
-// Update the createAppointment function to use KV
+// Update the createAppointment function to check if the appointment time is in the past
 export async function createAppointment(formData: FormData) {
   console.log("Creating appointment with form data:", Object.fromEntries(formData.entries()))
 
@@ -86,6 +87,31 @@ export async function createAppointment(formData: FormData) {
 
   const { userName, userEmail, date, time, reason, isEmergency, emergencyReason } = validatedFields.data
   console.log("Validated fields:", { userName, userEmail, date, time, reason, isEmergency, emergencyReason })
+
+  // Check if the appointment date is in the past
+  const appointmentDate = parseISO(date)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  if (isBefore(appointmentDate, today)) {
+    return {
+      message: "Cannot schedule appointments in the past. Please select a future date.",
+    }
+  }
+
+  // Check if the appointment time is in the past for today's date
+  if (appointmentDate.toDateString() === today.toDateString()) {
+    const now = new Date()
+    const [hours, minutes] = time.split(":").map(Number)
+    const appointmentDateTime = new Date(appointmentDate)
+    appointmentDateTime.setHours(hours, minutes, 0, 0)
+
+    if (isBefore(appointmentDateTime, now)) {
+      return {
+        message: "Cannot schedule appointments in the past. Please select a future time.",
+      }
+    }
+  }
 
   // Get clinic settings
   const clinicSettings = await getClinicSettings()
@@ -149,7 +175,7 @@ export async function createAppointment(formData: FormData) {
     time,
     reason,
     isEmergency: isEmergency || false,
-    emergencyReason,
+    emergencyReason: emergencyReason || "",
     status: "scheduled",
     createdAt: new Date().toISOString(),
   }

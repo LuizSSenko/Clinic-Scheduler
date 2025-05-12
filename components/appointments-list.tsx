@@ -96,8 +96,8 @@ function AppointmentsTable({ appointments, selectedDate }: AppointmentsTableProp
           <TableBody>
             {filteredAppointments.map((appointment) => (
               <React.Fragment key={appointment.id}>
-                <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(appointment.id)}>
-                  <TableCell>
+                <TableRow className="hover:bg-muted/50">
+                  <TableCell onClick={() => toggleExpand(appointment.id)} className="cursor-pointer">
                     {(() => {
                       try {
                         if (!appointment.date) return "N/A"
@@ -111,13 +111,19 @@ function AppointmentsTable({ appointments, selectedDate }: AppointmentsTableProp
                       }
                     })()}
                   </TableCell>
-                  <TableCell>{appointment.time || "N/A"}</TableCell>
-                  <TableCell>{appointment.userName || "N/A"}</TableCell>
-                  <TableCell>{appointment.userEmail || "N/A"}</TableCell>
-                  <TableCell>
+                  <TableCell onClick={() => toggleExpand(appointment.id)} className="cursor-pointer">
+                    {appointment.time || "N/A"}
+                  </TableCell>
+                  <TableCell onClick={() => toggleExpand(appointment.id)} className="cursor-pointer">
+                    {appointment.userName || "N/A"}
+                  </TableCell>
+                  <TableCell onClick={() => toggleExpand(appointment.id)} className="cursor-pointer">
+                    {appointment.userEmail || "N/A"}
+                  </TableCell>
+                  <TableCell onClick={() => toggleExpand(appointment.id)} className="cursor-pointer">
                     <span className="capitalize">{appointment.status || "N/A"}</span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={() => toggleExpand(appointment.id)} className="cursor-pointer">
                     {appointment.isEmergency ? (
                       <Badge variant="destructive">{t("appointments.emergency.yes")}</Badge>
                     ) : (
@@ -165,7 +171,7 @@ function AppointmentsTable({ appointments, selectedDate }: AppointmentsTableProp
           <Card key={appointment.id} className="overflow-hidden">
             <CardContent className="p-0">
               <div className="p-4 flex justify-between items-start">
-                <div>
+                <div onClick={() => toggleExpand(appointment.id)} className="cursor-pointer flex-grow">
                   <h3 className="font-medium">{appointment.userName || "N/A"}</h3>
                   <p className="text-sm text-muted-foreground">{appointment.userEmail || "N/A"}</p>
                 </div>
@@ -179,7 +185,10 @@ function AppointmentsTable({ appointments, selectedDate }: AppointmentsTableProp
                 </div>
               </div>
 
-              <div className="px-4 pb-3 grid grid-cols-2 gap-2 text-sm">
+              <div
+                onClick={() => toggleExpand(appointment.id)}
+                className="px-4 pb-3 grid grid-cols-2 gap-2 text-sm cursor-pointer"
+              >
                 <div>
                   <span className="font-medium">{t("appointments.table.date")}: </span>
                   {(() => {

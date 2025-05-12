@@ -22,7 +22,7 @@ import { createAppointment, getClinicSettings } from "@/lib/actions"
 import type { ClinicSettings } from "@/lib/types"
 import { Switch } from "@/components/ui/switch"
 
-// Update the form schema to remove the reason field
+// Update the form schema to make emergencyReason optional and handle it properly
 const formSchema = z.object({
   userName: z.string().min(2, {
     message: "Name must be at least 2 characters.",
@@ -81,8 +81,38 @@ export function AppointmentForm() {
     loadSettings()
   }, [])
 
-  // Update the onSubmit function to handle the modified form
+  // Update the onSubmit function to handle the emergencyReason field properly
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    // Validate that the selected date is not in the past
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (values.date < today) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Cannot schedule appointments in the past. Please select a future date.",
+      })
+      return
+    }
+
+    // Check if the selected time is in the past for today's date
+    if (values.date.toDateString() === new Date().toDateString()) {
+      const now = new Date()
+      const [hours, minutes] = values.time.split(":").map(Number)
+      const selectedTime = new Date(values.date)
+      selectedTime.setHours(hours, minutes, 0, 0)
+
+      if (selectedTime < now) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Cannot schedule appointments in the past. Please select a future time.",
+        })
+        return
+      }
+    }
+
     setIsSubmitting(true)
 
     const formData = new FormData()
@@ -90,10 +120,15 @@ export function AppointmentForm() {
     formData.append("userEmail", values.userEmail)
     formData.append("date", format(values.date, "yyyy-MM-dd"))
     formData.append("time", values.time)
-    formData.append("reason", values.isEmergency && values.emergencyReason ? values.emergencyReason : "General visit")
+    formData.append("reason", "General visit")
     formData.append("isEmergency", values.isEmergency.toString())
+
+    // Only append emergencyReason if it's an emergency and there's a reason provided
     if (values.isEmergency && values.emergencyReason) {
       formData.append("emergencyReason", values.emergencyReason)
+    } else {
+      // Explicitly set emergencyReason to an empty string to avoid null values
+      formData.append("emergencyReason", "")
     }
 
     const result = await createAppointment(formData)
@@ -295,6 +330,7 @@ export function AppointmentForm() {
                     placeholder={t("bookAppointment.emergencyDetails.placeholder")}
                     className="resize-none"
                     {...field}
+                    value={field.value || ""}
                   />
                 </FormControl>
                 <FormDescription>{t("bookAppointment.emergencyDetails.description")}</FormDescription>

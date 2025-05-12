@@ -47,6 +47,19 @@ export function BlockTimeForm() {
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    // Validate that the selected date is not in the past
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (values.date < today) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Cannot block time in the past. Please select a future date.",
+      })
+      return
+    }
+
     // Validate that end time is after start time
     if (values.startTime >= values.endTime) {
       form.setError("endTime", {

@@ -5,7 +5,16 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns"
+import {
+  format,
+  addMonths,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameDay,
+  isBefore,
+} from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { useLanguage } from "@/lib/language-context"
 
@@ -27,6 +36,15 @@ export function CustomGridCalendar({ appointmentCounts, onDateSelect, selectedDa
   }
 
   const handlePrevMonth = () => {
+    // Don't allow navigating to past months if current month is the current month
+    const today = new Date()
+    const currentMonthStart = startOfMonth(currentMonth)
+    const thisMonthStart = startOfMonth(today)
+
+    if (currentMonthStart.getTime() === thisMonthStart.getTime()) {
+      return // Don't go back if we're already in the current month
+    }
+
     setCurrentMonth(subMonths(currentMonth, 1))
   }
 
@@ -35,6 +53,14 @@ export function CustomGridCalendar({ appointmentCounts, onDateSelect, selectedDa
   }
 
   const handleDateClick = (date: Date) => {
+    // Don't allow selecting past dates
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (isBefore(date, today)) {
+      return // Don't select past dates
+    }
+
     if (selectedDate && isSameDay(selectedDate, date)) {
       onDateSelect(undefined)
     } else {
@@ -82,13 +108,23 @@ export function CustomGridCalendar({ appointmentCounts, onDateSelect, selectedDa
     weeks.push(calendarGrid.slice(i, i + 7))
   }
 
+  // Get today's date for comparison
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
   return (
     <Card>
       <CardContent className="p-4">
         <div className="calendar">
           {/* Calendar header with month/year and navigation */}
           <div className="flex items-center justify-between mb-4">
-            <Button variant="outline" size="icon" onClick={handlePrevMonth}>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handlePrevMonth}
+              // Disable the previous month button if we're in the current month
+              disabled={monthStart.getMonth() === today.getMonth() && monthStart.getFullYear() === today.getFullYear()}
+            >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <h2 className="text-lg font-medium">{format(currentMonth, "MMMM yyyy", { locale })}</h2>
@@ -113,13 +149,16 @@ export function CustomGridCalendar({ appointmentCounts, onDateSelect, selectedDa
                 {day ? (
                   <Button
                     variant={selectedDate && isSameDay(selectedDate, day) ? "default" : "ghost"}
-                    className="relative w-full h-full rounded-md flex items-center justify-center p-0"
+                    className={`relative w-full h-full rounded-md flex items-center justify-center p-0 ${
+                      isBefore(day, today) ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
                     onClick={() => handleDateClick(day)}
+                    disabled={isBefore(day, today)}
                   >
                     <span>{day.getDate()}</span>
                     {appointmentCounts[formatDateToYYYYMMDD(day)] && (
                       <Badge
-                        variant="secondary"
+                        variant="destructive"
                         className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center p-0 text-[10px]"
                       >
                         {appointmentCounts[formatDateToYYYYMMDD(day)]}

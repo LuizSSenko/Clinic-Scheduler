@@ -64,7 +64,7 @@ function Calendar({ className, classNames, showOutsideDays = true, appointmentCo
               <span>{props.date.getDate()}</span>
               {count && count > 0 && (
                 <Badge
-                  variant="secondary"
+                  variant="destructive"
                   className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center p-0 text-[10px]"
                 >
                   {count}
