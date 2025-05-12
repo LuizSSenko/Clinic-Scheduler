@@ -1,6 +1,6 @@
 "use client"
 
-import React, { Suspense, useState } from "react"
+import React, { Suspense, useState, useCallback } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { format, parseISO } from "date-fns"
 import { DeleteAppointmentButton } from "./delete-appointment-button"
@@ -11,13 +11,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import type { Appointment } from "@/lib/types"
 import { useLanguage } from "@/lib/language-context"
+import { getAppointments } from "@/lib/actions"
 
 interface AppointmentsTableProps {
   appointments: Appointment[]
   selectedDate: Date | undefined
+  onAppointmentDeleted: (id: string) => void
 }
 
-function AppointmentsTable({ appointments, selectedDate }: AppointmentsTableProps) {
+function AppointmentsTable({ appointments, selectedDate, onAppointmentDeleted }: AppointmentsTableProps) {
   const [expandedAppointment, setExpandedAppointment] = useState<string | null>(null)
   const { t } = useLanguage()
 
@@ -131,7 +133,10 @@ function AppointmentsTable({ appointments, selectedDate }: AppointmentsTableProp
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <DeleteAppointmentButton id={appointment.id} />
+                    <DeleteAppointmentButton
+                      id={appointment.id}
+                      onDelete={() => onAppointmentDeleted(appointment.id)}
+                    />
                   </TableCell>
                 </TableRow>
                 {expandedAppointment === appointment.id && (
@@ -181,7 +186,7 @@ function AppointmentsTable({ appointments, selectedDate }: AppointmentsTableProp
                   ) : (
                     <Badge variant="outline">{t("appointments.emergency.no")}</Badge>
                   )}
-                  <DeleteAppointmentButton id={appointment.id} />
+                  <DeleteAppointmentButton id={appointment.id} onDelete={() => onAppointmentDeleted(appointment.id)} />
                 </div>
               </div>
 
@@ -257,9 +262,34 @@ function AppointmentsTable({ appointments, selectedDate }: AppointmentsTableProp
   )
 }
 
-export function AppointmentsList({ appointments }: { appointments: Appointment[] }) {
+export function AppointmentsList({ appointments: initialAppointments }: { appointments: Appointment[] }) {
+  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments || [])
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
+  const [isLoading, setIsLoading] = useState(false)
   const { t } = useLanguage()
+
+  // Refresh appointments data
+  const refreshAppointments = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const freshAppointments = await getAppointments()
+      setAppointments(freshAppointments)
+    } catch (error) {
+      console.error("Error refreshing appointments:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // Update local state when an appointment is deleted
+  const handleAppointmentDeleted = useCallback((id: string) => {
+    console.log(`Handling appointment deletion for ID: ${id}`)
+    setAppointments((prevAppointments) => {
+      const filtered = prevAppointments.filter((appointment) => appointment.id !== id)
+      console.log(`Filtered appointments: ${filtered.length} (was ${prevAppointments.length})`)
+      return filtered
+    })
+  }, [])
 
   let title = t("appointments.allAppointments")
   if (selectedDate && selectedDate instanceof Date && !isNaN(selectedDate.getTime())) {
@@ -290,10 +320,19 @@ export function AppointmentsList({ appointments }: { appointments: Appointment[]
           )}
         </div>
         <div className="md:col-span-2">
-          <h2 className="text-xl font-semibold mb-4">{title}</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">{title}</h2>
+            <Button variant="outline" size="sm" onClick={refreshAppointments} disabled={isLoading}>
+              {isLoading ? t("loading.appointments") : t("appointments.refresh")}
+            </Button>
+          </div>
           <div className="rounded-md border">
             <Suspense fallback={<div className="p-4">{t("loading.appointments")}</div>}>
-              <AppointmentsTable appointments={appointments || []} selectedDate={selectedDate} />
+              <AppointmentsTable
+                appointments={appointments || []}
+                selectedDate={selectedDate}
+                onAppointmentDeleted={handleAppointmentDeleted}
+              />
             </Suspense>
           </div>
         </div>

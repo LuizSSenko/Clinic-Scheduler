@@ -7,7 +7,6 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -22,48 +21,73 @@ import { useRouter } from "next/navigation"
 
 interface DeleteAppointmentButtonProps {
   id: string
+  onDelete?: () => void
 }
 
-export function DeleteAppointmentButton({ id }: DeleteAppointmentButtonProps) {
+export function DeleteAppointmentButton({ id, onDelete }: DeleteAppointmentButtonProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const router = useRouter()
 
   async function handleDelete(e: React.MouseEvent) {
-    e.stopPropagation() // Prevent event bubbling
+    e.preventDefault()
+    e.stopPropagation()
+
     setIsDeleting(true)
+    console.log(`Deleting appointment with ID: ${id}`)
 
     try {
       const result = await deleteAppointment(id)
+      console.log("Delete result:", result)
 
-      toast({
-        title: "Success",
-        description: result.message,
-      })
+      if (result.success) {
+        // Call the onDelete callback to update the parent component's state
+        if (onDelete) {
+          onDelete()
+        }
 
-      // Close the dialog
-      setIsOpen(false)
+        toast({
+          title: "Success",
+          description: result.message,
+        })
 
-      // Refresh the page data
-      router.refresh()
+        // Close the dialog
+        setIsOpen(false)
+
+        // Refresh the router cache
+        router.refresh()
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.message || "Failed to delete appointment",
+        })
+      }
     } catch (error) {
-      console.error("Error deleting appointment:", error)
+      console.error("Error in delete handler:", error)
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to delete appointment. Please try again.",
+        description: "An unexpected error occurred. Please try again.",
       })
     } finally {
       setIsDeleting(false)
     }
   }
 
+  const handleOpenChange = (open: boolean) => {
+    if (!isDeleting) {
+      setIsOpen(open)
+    }
+  }
+
   const handleButtonClick = (e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent event bubbling
+    e.stopPropagation()
+    setIsOpen(true)
   }
 
   return (
-    <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
+    <AlertDialog open={isOpen} onOpenChange={handleOpenChange}>
       <AlertDialogTrigger asChild>
         <Button variant="ghost" size="icon" onClick={handleButtonClick} className="z-10">
           <Trash2 className="h-4 w-4" />
@@ -79,9 +103,9 @@ export function DeleteAppointmentButton({ id }: DeleteAppointmentButtonProps) {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+          <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
             {isDeleting ? "Deleting..." : "Delete"}
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

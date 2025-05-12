@@ -50,6 +50,7 @@ export function AppointmentForm() {
   const [isLoading, setIsLoading] = useState(true)
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [appointmentCounts, setAppointmentCounts] = useState<Record<string, number>>({})
+  const [submissionComplete, setSubmissionComplete] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -114,53 +115,69 @@ export function AppointmentForm() {
     }
 
     setIsSubmitting(true)
+    setSubmissionComplete(false)
 
-    const formData = new FormData()
-    formData.append("userName", values.userName)
-    formData.append("userEmail", values.userEmail)
-    formData.append("date", format(values.date, "yyyy-MM-dd"))
-    formData.append("time", values.time)
-    formData.append("reason", "General visit")
-    formData.append("isEmergency", values.isEmergency.toString())
+    try {
+      const formData = new FormData()
+      formData.append("userName", values.userName)
+      formData.append("userEmail", values.userEmail)
+      formData.append("date", format(values.date, "yyyy-MM-dd"))
+      formData.append("time", values.time)
+      formData.append("reason", "General visit")
+      formData.append("isEmergency", values.isEmergency.toString())
 
-    // Only append emergencyReason if it's an emergency and there's a reason provided
-    if (values.isEmergency && values.emergencyReason) {
-      formData.append("emergencyReason", values.emergencyReason)
-    } else {
-      // Explicitly set emergencyReason to an empty string to avoid null values
-      formData.append("emergencyReason", "")
-    }
+      // Only append emergencyReason if it's an emergency and there's a reason provided
+      if (values.isEmergency && values.emergencyReason) {
+        formData.append("emergencyReason", values.emergencyReason)
+      } else {
+        // Explicitly set emergencyReason to an empty string to avoid null values
+        formData.append("emergencyReason", "")
+      }
 
-    const result = await createAppointment(formData)
+      const result = await createAppointment(formData)
 
-    setIsSubmitting(false)
-
-    if (result.errors) {
-      // Handle validation errors
-      Object.entries(result.errors).forEach(([key, value]) => {
-        form.setError(key as any, {
-          type: "manual",
-          message: value as string,
+      if (result.errors) {
+        // Handle validation errors
+        Object.entries(result.errors).forEach(([key, value]) => {
+          form.setError(key as any, {
+            type: "manual",
+            message: value as string,
+          })
         })
-      })
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.message,
+        })
+      } else if (result.message && !result.message.includes("successfully")) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.message,
+        })
+      } else {
+        toast({
+          title: "Success",
+          description: result.message,
+        })
+        form.reset()
+        setSubmissionComplete(true)
+
+        // Use a timeout to allow the toast to be visible before redirecting
+        setTimeout(() => {
+          router.push("/")
+          router.refresh()
+        }, 1500)
+      }
+    } catch (error) {
+      console.error("Error creating appointment:", error)
       toast({
         variant: "destructive",
         title: "Error",
-        description: result.message,
+        description: "An unexpected error occurred. Please try again.",
       })
-    } else if (result.message && !result.message.includes("successfully")) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: result.message,
-      })
-    } else {
-      toast({
-        title: "Success",
-        description: result.message,
-      })
-      form.reset()
-      router.refresh()
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -205,6 +222,23 @@ export function AppointmentForm() {
 
   if (isLoading) {
     return <div className="text-center py-10">{t("loading.form")}</div>
+  }
+
+  if (submissionComplete) {
+    return (
+      <div className="text-center py-10 space-y-4">
+        <h3 className="text-xl font-medium">{t("bookAppointment.success.title")}</h3>
+        <p>{t("bookAppointment.success.message")}</p>
+        <Button
+          onClick={() => {
+            setSubmissionComplete(false)
+            form.reset()
+          }}
+        >
+          {t("bookAppointment.success.newAppointment")}
+        </Button>
+      </div>
+    )
   }
 
   // Replace hardcoded text with translation keys

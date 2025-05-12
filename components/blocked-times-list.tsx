@@ -1,12 +1,11 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useState, useEffect, useCallback } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { getBlockedTimes } from "@/lib/actions"
 import { format, parseISO } from "date-fns"
 import { DeleteBlockedTimeButton } from "./delete-blocked-time-button"
 import { useLanguage } from "@/lib/language-context"
-import { useState, useEffect } from "react"
 import type { BlockedTime } from "@/lib/types"
 
 // Add dynamic flag to ensure fresh data
@@ -30,6 +29,10 @@ function BlockedTimesTable() {
     }
 
     fetchBlockedTimes()
+  }, [])
+
+  const handleBlockedTimeDeleted = useCallback((id: string) => {
+    setBlockedTimes((prevBlockedTimes) => prevBlockedTimes.filter((blockedTime) => blockedTime.id !== id))
   }, [])
 
   if (loading) {
@@ -78,7 +81,7 @@ function BlockedTimesTable() {
               <div className="whitespace-pre-wrap break-words">{blockedTime.reason || "N/A"}</div>
             </TableCell>
             <TableCell className="text-right">
-              <DeleteBlockedTimeButton id={blockedTime.id} />
+              <DeleteBlockedTimeButton id={blockedTime.id} onDelete={() => handleBlockedTimeDeleted(blockedTime.id)} />
             </TableCell>
           </TableRow>
         ))}

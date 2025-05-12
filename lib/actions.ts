@@ -67,129 +67,147 @@ async function initializeClinicSettings() {
 export async function createAppointment(formData: FormData) {
   console.log("Creating appointment with form data:", Object.fromEntries(formData.entries()))
 
-  const validatedFields = AppointmentSchema.safeParse({
-    userName: formData.get("userName"),
-    userEmail: formData.get("userEmail"),
-    date: formData.get("date"),
-    time: formData.get("time"),
-    reason: formData.get("reason"),
-    isEmergency: formData.get("isEmergency"),
-    emergencyReason: formData.get("emergencyReason"),
-  })
+  try {
+    const validatedFields = AppointmentSchema.safeParse({
+      userName: formData.get("userName"),
+      userEmail: formData.get("userEmail"),
+      date: formData.get("date"),
+      time: formData.get("time"),
+      reason: formData.get("reason"),
+      isEmergency: formData.get("isEmergency"),
+      emergencyReason: formData.get("emergencyReason"),
+    })
 
-  if (!validatedFields.success) {
-    console.error("Validation failed:", validatedFields.error.flatten())
-    return {
-      errors: validatedFields.error.flatten().fieldErrors,
-      message: "Missing Fields. Failed to Create Appointment.",
-    }
-  }
-
-  const { userName, userEmail, date, time, reason, isEmergency, emergencyReason } = validatedFields.data
-  console.log("Validated fields:", { userName, userEmail, date, time, reason, isEmergency, emergencyReason })
-
-  // Check if the appointment date is in the past
-  const appointmentDate = parseISO(date)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  if (isBefore(appointmentDate, today)) {
-    return {
-      message: "Cannot schedule appointments in the past. Please select a future date.",
-    }
-  }
-
-  // Check if the appointment time is in the past for today's date
-  if (appointmentDate.toDateString() === today.toDateString()) {
-    const now = new Date()
-    const [hours, minutes] = time.split(":").map(Number)
-    const appointmentDateTime = new Date(appointmentDate)
-    appointmentDateTime.setHours(hours, minutes, 0, 0)
-
-    if (isBefore(appointmentDateTime, now)) {
+    if (!validatedFields.success) {
+      console.error("Validation failed:", validatedFields.error.flatten())
       return {
-        message: "Cannot schedule appointments in the past. Please select a future time.",
+        success: false,
+        errors: validatedFields.error.flatten().fieldErrors,
+        message: "Missing Fields. Failed to Create Appointment.",
       }
     }
-  }
 
-  // Get clinic settings
-  const clinicSettings = await getClinicSettings()
+    const { userName, userEmail, date, time, reason, isEmergency, emergencyReason } = validatedFields.data
+    console.log("Validated fields:", { userName, userEmail, date, time, reason, isEmergency, emergencyReason })
 
-  // Check if the time is outside clinic hours
-  if (time < clinicSettings.workHours.start || time >= clinicSettings.workHours.end) {
-    console.log("Time outside clinic hours:", time)
+    // Check if the appointment date is in the past
+    const appointmentDate = parseISO(date)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (isBefore(appointmentDate, today)) {
+      return {
+        success: false,
+        message: "Cannot schedule appointments in the past. Please select a future date.",
+      }
+    }
+
+    // Check if the appointment time is in the past for today's date
+    if (appointmentDate.toDateString() === today.toDateString()) {
+      const now = new Date()
+      const [hours, minutes] = time.split(":").map(Number)
+      const appointmentDateTime = new Date(appointmentDate)
+      appointmentDateTime.setHours(hours, minutes, 0, 0)
+
+      if (isBefore(appointmentDateTime, now)) {
+        return {
+          success: false,
+          message: "Cannot schedule appointments in the past. Please select a future time.",
+        }
+      }
+    }
+
+    // Get clinic settings
+    const clinicSettings = await getClinicSettings()
+
+    // Check if the time is outside clinic hours
+    if (time < clinicSettings.workHours.start || time >= clinicSettings.workHours.end) {
+      console.log("Time outside clinic hours:", time)
+      return {
+        success: false,
+        message: "This time is outside clinic hours. Please select a time during clinic hours.",
+      }
+    }
+
+    // Check if the time is during lunch time
+    if (
+      clinicSettings.lunchTime.enabled &&
+      time >= clinicSettings.lunchTime.start &&
+      time < clinicSettings.lunchTime.end
+    ) {
+      console.log("Time during lunch break:", time)
+      return {
+        success: false,
+        message: "This time is during the clinic's lunch break. Please select another time.",
+      }
+    }
+
+    // Get blocked times
+    const blockedTimes = await getBlockedTimes()
+
+    // Check if the time is blocked
+    const isTimeBlocked = blockedTimes.some((blockedTime) => {
+      return blockedTime.date === date && blockedTime.startTime <= time && blockedTime.endTime > time
+    })
+
+    if (isTimeBlocked) {
+      console.log("Time is blocked:", time)
+      return {
+        success: false,
+        message: "This time slot is not available. Please select another time.",
+      }
+    }
+
+    // Get appointments
+    const appointments = await getAppointments()
+
+    // Check if there are too many appointments at this time
+    const appointmentsAtTime = appointments.filter(
+      (appointment) => appointment.date === date && appointment.time === time,
+    ).length
+
+    if (appointmentsAtTime >= clinicSettings.maxConcurrentAppointments) {
+      console.log("Time slot fully booked:", time)
+      return {
+        success: false,
+        message: "This time slot is fully booked. Please select another time.",
+      }
+    }
+
+    const newAppointment: Appointment = {
+      id: uuidv4(),
+      userId: uuidv4(), // In a real app, this would be the authenticated user's ID
+      userName,
+      userEmail,
+      date,
+      time,
+      reason,
+      isEmergency: isEmergency || false,
+      emergencyReason: emergencyReason || "",
+      status: "scheduled",
+      createdAt: new Date().toISOString(),
+    }
+
+    console.log("Adding new appointment:", newAppointment)
+
+    // Add the new appointment to KV
+    await kv.lpush("clinic:appointments", newAppointment)
+    console.log("Appointment added to KV")
+
+    revalidatePath("/")
+    revalidatePath("/admin") // Also revalidate the admin path
+
     return {
-      message: "This time is outside clinic hours. Please select a time during clinic hours.",
+      success: true,
+      message: "Appointment created successfully!",
+    }
+  } catch (error) {
+    console.error("Error in createAppointment:", error)
+    return {
+      success: false,
+      message: "An unexpected error occurred. Please try again.",
     }
   }
-
-  // Check if the time is during lunch time
-  if (
-    clinicSettings.lunchTime.enabled &&
-    time >= clinicSettings.lunchTime.start &&
-    time < clinicSettings.lunchTime.end
-  ) {
-    console.log("Time during lunch break:", time)
-    return {
-      message: "This time is during the clinic's lunch break. Please select another time.",
-    }
-  }
-
-  // Get blocked times
-  const blockedTimes = await getBlockedTimes()
-
-  // Check if the time is blocked
-  const isTimeBlocked = blockedTimes.some((blockedTime) => {
-    return blockedTime.date === date && blockedTime.startTime <= time && blockedTime.endTime > time
-  })
-
-  if (isTimeBlocked) {
-    console.log("Time is blocked:", time)
-    return {
-      message: "This time slot is not available. Please select another time.",
-    }
-  }
-
-  // Get appointments
-  const appointments = await getAppointments()
-
-  // Check if there are too many appointments at this time
-  const appointmentsAtTime = appointments.filter(
-    (appointment) => appointment.date === date && appointment.time === time,
-  ).length
-
-  if (appointmentsAtTime >= clinicSettings.maxConcurrentAppointments) {
-    console.log("Time slot fully booked:", time)
-    return {
-      message: "This time slot is fully booked. Please select another time.",
-    }
-  }
-
-  const newAppointment: Appointment = {
-    id: uuidv4(),
-    userId: uuidv4(), // In a real app, this would be the authenticated user's ID
-    userName,
-    userEmail,
-    date,
-    time,
-    reason,
-    isEmergency: isEmergency || false,
-    emergencyReason: emergencyReason || "",
-    status: "scheduled",
-    createdAt: new Date().toISOString(),
-  }
-
-  console.log("Adding new appointment:", newAppointment)
-
-  // Add the new appointment to KV
-  await kv.lpush("clinic:appointments", newAppointment)
-  console.log("Appointment added to KV")
-
-  revalidatePath("/")
-  revalidatePath("/admin") // Also revalidate the admin path
-
-  return { message: "Appointment created successfully!" }
 }
 
 export async function createBlockedTime(formData: FormData) {
@@ -342,48 +360,89 @@ export async function getClinicSettings(): Promise<ClinicSettings> {
 
 export async function deleteAppointment(id: string) {
   try {
+    console.log(`Attempting to delete appointment with ID: ${id}`)
+
     // Get all appointments
     const appointments = await getAppointments()
+    console.log(`Retrieved ${appointments.length} appointments`)
+
+    // Find the appointment to delete
+    const appointmentToDelete = appointments.find((appointment) => appointment.id === id)
+    if (!appointmentToDelete) {
+      console.error(`Appointment with ID ${id} not found`)
+      return { success: false, message: "Appointment not found." }
+    }
+
+    console.log(`Found appointment to delete:`, appointmentToDelete)
 
     // Filter out the appointment to delete
     const updatedAppointments = appointments.filter((appointment) => appointment.id !== id)
+    console.log(`Filtered appointments: ${updatedAppointments.length} remaining`)
 
     // Clear the appointments list
     await kv.del("clinic:appointments")
+    console.log(`Deleted appointments list from KV`)
 
-    // Add the updated appointments back
+    // Add the updated appointments back if there are any
     if (updatedAppointments.length > 0) {
       await kv.rpush("clinic:appointments", ...updatedAppointments)
+      console.log(`Added ${updatedAppointments.length} appointments back to KV`)
+    } else {
+      console.log(`No appointments to add back to KV`)
     }
 
+    // Revalidate paths to update UI
+    revalidatePath("/")
     revalidatePath("/admin")
-    return { message: "Appointment deleted successfully!" }
+
+    console.log(`Successfully deleted appointment with ID: ${id}`)
+    return { success: true, message: "Appointment deleted successfully!" }
   } catch (error) {
     console.error("Error deleting appointment:", error)
-    return { message: "Failed to delete appointment." }
+    return { success: false, message: "Failed to delete appointment. Please try again." }
   }
 }
 
 export async function deleteBlockedTime(id: string) {
   try {
+    console.log(`Attempting to delete blocked time with ID: ${id}`)
+
     // Get all blocked times
     const blockedTimes = await getBlockedTimes()
+    console.log(`Retrieved ${blockedTimes.length} blocked times`)
+
+    // Find the blocked time to delete
+    const blockedTimeToDelete = blockedTimes.find((blockedTime) => blockedTime.id === id)
+    if (!blockedTimeToDelete) {
+      console.error(`Blocked time with ID ${id} not found`)
+      return { success: false, message: "Blocked time not found." }
+    }
+
+    console.log(`Found blocked time to delete:`, blockedTimeToDelete)
 
     // Filter out the blocked time to delete
     const updatedBlockedTimes = blockedTimes.filter((blockedTime) => blockedTime.id !== id)
+    console.log(`Filtered blocked times: ${updatedBlockedTimes.length} remaining`)
 
     // Clear the blocked times list
     await kv.del("clinic:blockedTimes")
+    console.log(`Deleted blocked times list from KV`)
 
-    // Add the updated blocked times back
+    // Add the updated blocked times back if there are any
     if (updatedBlockedTimes.length > 0) {
       await kv.rpush("clinic:blockedTimes", ...updatedBlockedTimes)
+      console.log(`Added ${updatedBlockedTimes.length} blocked times back to KV`)
+    } else {
+      console.log(`No blocked times to add back to KV`)
     }
 
+    // Revalidate paths to update UI
     revalidatePath("/admin")
-    return { message: "Blocked time deleted successfully!" }
+
+    console.log(`Successfully deleted blocked time with ID: ${id}`)
+    return { success: true, message: "Blocked time deleted successfully!" }
   } catch (error) {
     console.error("Error deleting blocked time:", error)
-    return { message: "Failed to delete blocked time." }
+    return { success: false, message: "Failed to delete blocked time. Please try again." }
   }
 }

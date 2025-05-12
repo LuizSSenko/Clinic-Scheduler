@@ -16,29 +16,68 @@ import {
 } from "@/components/ui/alert-dialog"
 import { toast } from "@/components/ui/use-toast"
 import { deleteBlockedTime } from "@/lib/actions"
+import { useRouter } from "next/navigation"
 
 interface DeleteBlockedTimeButtonProps {
   id: string
+  onDelete?: () => void
 }
 
-export function DeleteBlockedTimeButton({ id }: DeleteBlockedTimeButtonProps) {
+export function DeleteBlockedTimeButton({ id, onDelete }: DeleteBlockedTimeButtonProps) {
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
+  const router = useRouter()
 
   async function handleDelete() {
     setIsDeleting(true)
-    const result = await deleteBlockedTime(id)
-    setIsDeleting(false)
 
-    toast({
-      title: "Success",
-      description: result.message,
-    })
+    try {
+      const result = await deleteBlockedTime(id)
+
+      // Call the onDelete callback to update the parent component's state
+      if (onDelete) {
+        onDelete()
+      }
+
+      toast({
+        title: "Success",
+        description: result.message,
+      })
+
+      // Close the dialog
+      setIsOpen(false)
+
+      // Refresh the router cache
+      router.refresh()
+    } catch (error) {
+      console.error("Error deleting blocked time:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete blocked time. Please try again.",
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleOpenChange = (open: boolean) => {
+    if (!isDeleting) {
+      setIsOpen(open)
+    }
   }
 
   return (
-    <AlertDialog>
+    <AlertDialog open={isOpen} onOpenChange={handleOpenChange}>
       <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsOpen(true)
+          }}
+        >
           <Trash2 className="h-4 w-4" />
           <span className="sr-only">Delete blocked time</span>
         </Button>
@@ -51,8 +90,14 @@ export function DeleteBlockedTimeButton({ id }: DeleteBlockedTimeButtonProps) {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+          <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDelete()
+            }}
+            disabled={isDeleting}
+          >
             {isDeleting ? "Deleting..." : "Delete"}
           </AlertDialogAction>
         </AlertDialogFooter>

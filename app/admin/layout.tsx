@@ -1,7 +1,8 @@
 "use client"
 
 import type React from "react"
-import { Header } from "@/components/header"
+// Remove the Header import since it's causing duplication
+// import { Header } from "@/components/header"
 
 export default function AdminLayout({
   children,
@@ -10,7 +11,7 @@ export default function AdminLayout({
 }) {
   return (
     <div className="min-h-screen flex flex-col">
-      <Header />
+      {/* Remove the Header component from here */}
       <div className="flex-1">{children}</div>
     </div>
   )

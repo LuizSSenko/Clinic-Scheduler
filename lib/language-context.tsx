@@ -39,6 +39,9 @@ const enTranslations = {
     "Provide details about your emergency so we can prioritize your appointment",
   "bookAppointment.submit": "Book Appointment",
   "bookAppointment.submitting": "Booking...",
+  "bookAppointment.success.title": "Appointment Booked Successfully!",
+  "bookAppointment.success.message": "Your appointment has been scheduled. You will receive a confirmation shortly.",
+  "bookAppointment.success.newAppointment": "Book Another Appointment",
 
   // Admin Dashboard
   "admin.title": "Admin Dashboard",
@@ -67,6 +70,7 @@ const enTranslations = {
   "appointments.emergencyDetails": "Emergency Details:",
   "appointments.showDetails": "Show Details",
   "appointments.hideDetails": "Hide Details",
+  "appointments.refresh": "Refresh",
 
   // Clinic Settings
   "settings.general": "General Settings",
@@ -86,6 +90,7 @@ const enTranslations = {
     "Maximum number of appointments that can be scheduled at the same time slot",
   "settings.form.save": "Save Settings",
   "settings.form.saving": "Saving...",
+  "settings.form.saveSettings": "Save Settings",
 
   // Block Time Form
   "blockTime.date": "Date",
@@ -150,6 +155,9 @@ const ptBRTranslations = {
     "Forneça detalhes sobre sua emergência para que possamos priorizar seu agendamento",
   "bookAppointment.submit": "Agendar Consulta",
   "bookAppointment.submitting": "Agendando...",
+  "bookAppointment.success.title": "Consulta Agendada com Sucesso!",
+  "bookAppointment.success.message": "Sua consulta foi agendada. Você receberá uma confirmação em breve.",
+  "bookAppointment.success.newAppointment": "Agendar Outra Consulta",
 
   // Admin Dashboard
   "admin.title": "Painel Administrativo",
@@ -178,6 +186,7 @@ const ptBRTranslations = {
   "appointments.emergencyDetails": "Detalhes da Emergência:",
   "appointments.showDetails": "Mostrar Detalhes",
   "appointments.hideDetails": "Ocultar Detalhes",
+  "appointments.refresh": "Atualizar",
 
   // Clinic Settings
   "settings.general": "Configurações Gerais",
@@ -197,6 +206,7 @@ const ptBRTranslations = {
     "Número máximo de consultas que podem ser agendadas no mesmo horário",
   "settings.form.save": "Salvar Configurações",
   "settings.form.saving": "Salvando...",
+  "settings.form.saveSettings": "Salvar Configurações",
 
   // Block Time Form
   "blockTime.date": "Data",
