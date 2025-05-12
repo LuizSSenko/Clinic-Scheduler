@@ -229,6 +229,7 @@ export function AppointmentForm() {
       <div className="text-center py-10 space-y-4">
         <h3 className="text-xl font-medium">{t("bookAppointment.success.title")}</h3>
         <p>{t("bookAppointment.success.message")}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{t("bookAppointment.success.emailConfirmation")}</p>
         <Button
           onClick={() => {
             setSubmissionComplete(false)

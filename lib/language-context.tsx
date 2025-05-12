@@ -42,6 +42,7 @@ const enTranslations = {
   "bookAppointment.success.title": "Appointment Booked Successfully!",
   "bookAppointment.success.message": "Your appointment has been scheduled. You will receive a confirmation shortly.",
   "bookAppointment.success.newAppointment": "Book Another Appointment",
+  "bookAppointment.success.emailConfirmation": "A confirmation email has been sent to your email address.",
 
   // Admin Dashboard
   "admin.title": "Admin Dashboard",
@@ -158,6 +159,7 @@ const ptBRTranslations = {
   "bookAppointment.success.title": "Consulta Agendada com Sucesso!",
   "bookAppointment.success.message": "Sua consulta foi agendada. Você receberá uma confirmação em breve.",
   "bookAppointment.success.newAppointment": "Agendar Outra Consulta",
+  "bookAppointment.success.emailConfirmation": "Um email de confirmação foi enviado para o seu endereço de email.",
 
   // Admin Dashboard
   "admin.title": "Painel Administrativo",

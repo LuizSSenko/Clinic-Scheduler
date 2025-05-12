@@ -7,6 +7,9 @@ import type { ClinicSettings, Appointment, BlockedTime } from "./types"
 import { kv } from "./kv"
 import { parseISO, isBefore } from "date-fns"
 
+// Import the email service at the top of the file
+import { sendAppointmentConfirmationEmail } from "./email-service"
+
 // Schema for appointment creation with updated validation
 const AppointmentSchema = z.object({
   userName: z.string().min(1, "Name is required"),
@@ -193,6 +196,17 @@ export async function createAppointment(formData: FormData) {
     // Add the new appointment to KV
     await kv.lpush("clinic:appointments", newAppointment)
     console.log("Appointment added to KV")
+
+    // Send confirmation email to the user
+    try {
+      // Detect language from the user's email domain or default to English
+      const language = userEmail.endsWith(".br") ? "pt-BR" : "en"
+      await sendAppointmentConfirmationEmail(newAppointment, language)
+      console.log("Confirmation email sent to", userEmail)
+    } catch (emailError) {
+      // Don't fail the appointment creation if email sending fails
+      console.error("Failed to send confirmation email:", emailError)
+    }
 
     revalidatePath("/")
     revalidatePath("/admin") // Also revalidate the admin path
