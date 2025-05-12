@@ -42,7 +42,7 @@ const formSchema = z.object({
 
 export function AppointmentForm() {
   // Move useLanguage to the top to ensure consistent hook order
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
 
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -125,6 +125,9 @@ export function AppointmentForm() {
       formData.append("time", values.time)
       formData.append("reason", "General visit")
       formData.append("isEmergency", values.isEmergency.toString())
+
+      // Pass the current UI language to the server action
+      formData.append("language", language)
 
       // Only append emergencyReason if it's an emergency and there's a reason provided
       if (values.isEmergency && values.emergencyReason) {

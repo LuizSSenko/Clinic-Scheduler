@@ -110,10 +110,12 @@ Equipe da Clínica
 
 /**
  * Sends a confirmation email to the user after booking an appointment
+ * @param appointment The appointment details
+ * @param language The language to use for the email (from the UI preference)
  */
 export async function sendAppointmentConfirmationEmail(appointment: Appointment, language: "en" | "pt-BR" = "en") {
   try {
-    console.log(`Sending confirmation email to ${appointment.userEmail}`)
+    console.log(`Sending confirmation email to ${appointment.userEmail} in ${language}`)
 
     const subject = appointmentConfirmationTemplates.subject[language]
     const body = appointmentConfirmationTemplates.body[language](appointment)

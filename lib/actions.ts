@@ -22,6 +22,7 @@ const AppointmentSchema = z.object({
     .optional()
     .transform((val) => val === "true"),
   emergencyReason: z.string().optional().default(""),
+  language: z.enum(["en", "pt-BR"]).default("en"),
 })
 
 // Schema for blocked time creation
@@ -79,6 +80,7 @@ export async function createAppointment(formData: FormData) {
       reason: formData.get("reason"),
       isEmergency: formData.get("isEmergency"),
       emergencyReason: formData.get("emergencyReason"),
+      language: formData.get("language"),
     })
 
     if (!validatedFields.success) {
@@ -90,8 +92,17 @@ export async function createAppointment(formData: FormData) {
       }
     }
 
-    const { userName, userEmail, date, time, reason, isEmergency, emergencyReason } = validatedFields.data
-    console.log("Validated fields:", { userName, userEmail, date, time, reason, isEmergency, emergencyReason })
+    const { userName, userEmail, date, time, reason, isEmergency, emergencyReason, language } = validatedFields.data
+    console.log("Validated fields:", {
+      userName,
+      userEmail,
+      date,
+      time,
+      reason,
+      isEmergency,
+      emergencyReason,
+      language,
+    })
 
     // Check if the appointment date is in the past
     const appointmentDate = parseISO(date)
@@ -197,12 +208,10 @@ export async function createAppointment(formData: FormData) {
     await kv.lpush("clinic:appointments", newAppointment)
     console.log("Appointment added to KV")
 
-    // Send confirmation email to the user
+    // Send confirmation email to the user using the UI language preference
     try {
-      // Detect language from the user's email domain or default to English
-      const language = userEmail.endsWith(".br") ? "pt-BR" : "en"
       await sendAppointmentConfirmationEmail(newAppointment, language)
-      console.log("Confirmation email sent to", userEmail)
+      console.log(`Confirmation email sent to ${userEmail} in ${language}`)
     } catch (emailError) {
       // Don't fail the appointment creation if email sending fails
       console.error("Failed to send confirmation email:", emailError)
