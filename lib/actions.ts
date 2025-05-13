@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { v4 as uuidv4 } from "uuid"
-import type { ClinicSettings, Appointment, BlockedTime } from "./types"
+import type { ClinicSettings, Appointment, BlockedTime, TimeSlot } from "./types"
 import { kv } from "./kv"
-import { parseISO, isBefore } from "date-fns"
+import { parseISO, isBefore, addHours } from "date-fns"
 
 // Import the email service at the top of the file
 import { sendAppointmentConfirmationEmail } from "./email-service"
@@ -67,6 +67,114 @@ async function initializeClinicSettings() {
   return settings
 }
 
+/**
+ * Get available time slots for a specific date
+ * This function checks:
+ * 1. Clinic working hours
+ * 2. Lunch break
+ * 3. Blocked time periods
+ * 4. Maximum concurrent appointments
+ * 5. Past times (using GMT-3)
+ */
+export async function getAvailableTimeSlots(date: string): Promise<TimeSlot[]> {
+  try {
+    // Get clinic settings
+    const clinicSettings = await getClinicSettings()
+
+    // Get all appointments for the date
+    const appointments = await getAppointments()
+    const appointmentsForDate = appointments.filter((appointment) => appointment.date === date)
+
+    // Get all blocked times for the date
+    const blockedTimes = await getBlockedTimes()
+    const blockedTimesForDate = blockedTimes.filter((blockedTime) => blockedTime.date === date)
+
+    // Generate time slots based on clinic hours (30-minute intervals)
+    const { start, end } = clinicSettings.workHours
+
+    // Convert time strings to minutes for easier calculation
+    const startMinutes = Number.parseInt(start.split(":")[0]) * 60 + Number.parseInt(start.split(":")[1])
+    const endMinutes = Number.parseInt(end.split(":")[0]) * 60 + Number.parseInt(end.split(":")[1])
+
+    // Get current time in GMT-3
+    const now = new Date()
+    const gmt3Now = addHours(now, -3) // GMT-3 adjustment
+
+    // Check if the date is today
+    const isToday = parseISO(date).toDateString() === now.toDateString()
+
+    // Generate all possible time slots
+    const timeSlots: TimeSlot[] = []
+
+    for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
+      const hour = Math.floor(minutes / 60)
+      const minute = minutes % 60
+      const timeString = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
+
+      // Create a date object for this time slot to compare with current time
+      const timeSlotDate = parseISO(date)
+      timeSlotDate.setHours(hour, minute, 0, 0)
+
+      // Skip if time is in the past (for today only)
+      if (isToday && isBefore(timeSlotDate, gmt3Now)) {
+        continue
+      }
+
+      // Check if time is during lunch break
+      let isLunchTime = false
+      if (clinicSettings.lunchTime.enabled) {
+        const lunchStartMinutes =
+          Number.parseInt(clinicSettings.lunchTime.start.split(":")[0]) * 60 +
+          Number.parseInt(clinicSettings.lunchTime.start.split(":")[1])
+        const lunchEndMinutes =
+          Number.parseInt(clinicSettings.lunchTime.end.split(":")[0]) * 60 +
+          Number.parseInt(clinicSettings.lunchTime.end.split(":")[1])
+
+        if (minutes >= lunchStartMinutes && minutes < lunchEndMinutes) {
+          isLunchTime = true
+        }
+      }
+
+      // Check if time is in a blocked period
+      let isBlocked = false
+      let blockReason = ""
+
+      for (const blockedTime of blockedTimesForDate) {
+        if (timeString >= blockedTime.startTime && timeString < blockedTime.endTime) {
+          isBlocked = true
+          blockReason = blockedTime.reason
+          break
+        }
+      }
+
+      // Count existing appointments at this time
+      const appointmentsAtTime = appointmentsForDate.filter((appointment) => appointment.time === timeString).length
+
+      // Calculate remaining slots
+      const remainingSlots = clinicSettings.maxConcurrentAppointments - appointmentsAtTime
+
+      // Determine if the slot is available
+      const isAvailable = !isLunchTime && !isBlocked && remainingSlots > 0
+
+      // Only add available slots or slots that are unavailable due to being fully booked
+      // (don't add lunch time or blocked slots)
+      if (isAvailable || (!isLunchTime && !isBlocked && remainingSlots <= 0)) {
+        timeSlots.push({
+          time: timeString,
+          available: isAvailable,
+          remainingSlots: isAvailable ? remainingSlots : 0,
+          reason: isBlocked ? blockReason : undefined,
+        })
+      }
+    }
+
+    return timeSlots
+  } catch (error) {
+    console.error("Error getting available time slots:", error)
+    return []
+  }
+}
+
 // Update the createAppointment function to check if the appointment time is in the past
 export async function createAppointment(formData: FormData) {
   console.log("Creating appointment with form data:", Object.fromEntries(formData.entries()))
@@ -116,14 +224,16 @@ export async function createAppointment(formData: FormData) {
       }
     }
 
-    // Check if the appointment time is in the past for today's date
+    // Check if the appointment time is in the past for today's date (using GMT-3)
     if (appointmentDate.toDateString() === today.toDateString()) {
       const now = new Date()
+      const gmt3Now = addHours(now, -3) // GMT-3 adjustment
+
       const [hours, minutes] = time.split(":").map(Number)
       const appointmentDateTime = new Date(appointmentDate)
       appointmentDateTime.setHours(hours, minutes, 0, 0)
 
-      if (isBefore(appointmentDateTime, now)) {
+      if (isBefore(appointmentDateTime, gmt3Now)) {
         return {
           success: false,
           message: "Cannot schedule appointments in the past. Please select a future time.",
@@ -131,60 +241,21 @@ export async function createAppointment(formData: FormData) {
       }
     }
 
-    // Get clinic settings
-    const clinicSettings = await getClinicSettings()
+    // Get available time slots to verify if the selected time is still available
+    const availableTimeSlots = await getAvailableTimeSlots(date)
+    const selectedTimeSlot = availableTimeSlots.find((slot) => slot.time === time)
 
-    // Check if the time is outside clinic hours
-    if (time < clinicSettings.workHours.start || time >= clinicSettings.workHours.end) {
-      console.log("Time outside clinic hours:", time)
+    if (!selectedTimeSlot) {
       return {
         success: false,
-        message: "This time is outside clinic hours. Please select a time during clinic hours.",
+        message: "The selected time slot is not available. Please select another time.",
       }
     }
 
-    // Check if the time is during lunch time
-    if (
-      clinicSettings.lunchTime.enabled &&
-      time >= clinicSettings.lunchTime.start &&
-      time < clinicSettings.lunchTime.end
-    ) {
-      console.log("Time during lunch break:", time)
+    if (!selectedTimeSlot.available) {
       return {
         success: false,
-        message: "This time is during the clinic's lunch break. Please select another time.",
-      }
-    }
-
-    // Get blocked times
-    const blockedTimes = await getBlockedTimes()
-
-    // Check if the time is blocked
-    const isTimeBlocked = blockedTimes.some((blockedTime) => {
-      return blockedTime.date === date && blockedTime.startTime <= time && blockedTime.endTime > time
-    })
-
-    if (isTimeBlocked) {
-      console.log("Time is blocked:", time)
-      return {
-        success: false,
-        message: "This time slot is not available. Please select another time.",
-      }
-    }
-
-    // Get appointments
-    const appointments = await getAppointments()
-
-    // Check if there are too many appointments at this time
-    const appointmentsAtTime = appointments.filter(
-      (appointment) => appointment.date === date && appointment.time === time,
-    ).length
-
-    if (appointmentsAtTime >= clinicSettings.maxConcurrentAppointments) {
-      console.log("Time slot fully booked:", time)
-      return {
-        success: false,
-        message: "This time slot is fully booked. Please select another time.",
+        message: "This time slot is no longer available. Please select another time.",
       }
     }
 
@@ -263,6 +334,7 @@ export async function createBlockedTime(formData: FormData) {
   await kv.lpush("clinic:blockedTimes", newBlockedTime)
 
   revalidatePath("/admin")
+  revalidatePath("/") // Also revalidate the home page to update available time slots
   return { message: "Time blocked successfully!" }
 }
 
@@ -345,6 +417,7 @@ export async function updateClinicSettings(formData: FormData) {
   await kv.set("clinic:settings", clinicSettings)
 
   revalidatePath("/admin")
+  revalidatePath("/") // Also revalidate the home page to update available time slots
   return { message: "Clinic settings updated successfully!" }
 }
 
@@ -461,6 +534,7 @@ export async function deleteBlockedTime(id: string) {
 
     // Revalidate paths to update UI
     revalidatePath("/admin")
+    revalidatePath("/") // Also revalidate the home page to update available time slots
 
     console.log(`Successfully deleted blocked time with ID: ${id}`)
     return { success: true, message: "Blocked time deleted successfully!" }

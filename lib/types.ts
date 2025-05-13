@@ -33,3 +33,10 @@ export type ClinicSettings = {
   }
   maxConcurrentAppointments: number
 }
+
+export type TimeSlot = {
+  time: string
+  available: boolean
+  remainingSlots?: number
+  reason?: string
+}

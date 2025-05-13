@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { format } from "date-fns"
-import { CalendarIcon } from "lucide-react"
+import { format, addHours } from "date-fns"
+import { CalendarIcon, Clock } from "lucide-react"
 import { useLanguage } from "@/lib/language-context"
 
 import { cn } from "@/lib/utils"
@@ -18,9 +18,10 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/components/ui/use-toast"
-import { createAppointment, getClinicSettings } from "@/lib/actions"
-import type { ClinicSettings } from "@/lib/types"
+import { createAppointment, getClinicSettings, getAvailableTimeSlots } from "@/lib/actions"
+import type { ClinicSettings, TimeSlot } from "@/lib/types"
 import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
 
 // Update the form schema to make emergencyReason optional and handle it properly
 const formSchema = z.object({
@@ -51,6 +52,8 @@ export function AppointmentForm() {
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [appointmentCounts, setAppointmentCounts] = useState<Record<string, number>>({})
   const [submissionComplete, setSubmissionComplete] = useState(false)
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([])
+  const [isLoadingTimeSlots, setIsLoadingTimeSlots] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -61,6 +64,9 @@ export function AppointmentForm() {
       emergencyReason: "",
     },
   })
+
+  // Watch for date changes to update available time slots
+  const selectedDate = form.watch("date")
 
   useEffect(() => {
     async function loadSettings() {
@@ -82,6 +88,39 @@ export function AppointmentForm() {
     loadSettings()
   }, [])
 
+  // Update available time slots when date changes
+  useEffect(() => {
+    async function loadAvailableTimeSlots() {
+      if (!selectedDate) return
+
+      setIsLoadingTimeSlots(true)
+      try {
+        const formattedDate = format(selectedDate, "yyyy-MM-dd")
+        const slots = await getAvailableTimeSlots(formattedDate)
+        setAvailableTimeSlots(slots)
+
+        // Reset time selection if the previously selected time is no longer available
+        const currentTime = form.getValues("time")
+        if (currentTime && !slots.some((slot) => slot.time === currentTime && slot.available)) {
+          form.setValue("time", "")
+        }
+      } catch (error) {
+        console.error("Failed to load available time slots:", error)
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load available time slots.",
+        })
+      } finally {
+        setIsLoadingTimeSlots(false)
+      }
+    }
+
+    if (selectedDate) {
+      loadAvailableTimeSlots()
+    }
+  }, [selectedDate, form])
+
   // Update the onSubmit function to handle the emergencyReason field properly
   async function onSubmit(values: z.infer<typeof formSchema>) {
     // Validate that the selected date is not in the past
@@ -99,12 +138,15 @@ export function AppointmentForm() {
 
     // Check if the selected time is in the past for today's date
     if (values.date.toDateString() === new Date().toDateString()) {
+      // Create a date object with GMT-3 timezone offset
       const now = new Date()
+      const gmt3Now = addHours(now, -3) // GMT-3 adjustment
+
       const [hours, minutes] = values.time.split(":").map(Number)
       const selectedTime = new Date(values.date)
       selectedTime.setHours(hours, minutes, 0, 0)
 
-      if (selectedTime < now) {
+      if (selectedTime < gmt3Now) {
         toast({
           variant: "destructive",
           title: "Error",
@@ -112,6 +154,18 @@ export function AppointmentForm() {
         })
         return
       }
+    }
+
+    // Check if the selected time slot is still available
+    const isTimeSlotAvailable = availableTimeSlots.some((slot) => slot.time === values.time && slot.available)
+
+    if (!isTimeSlotAvailable) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "This time slot is no longer available. Please select another time.",
+      })
+      return
     }
 
     setIsSubmitting(true)
@@ -183,45 +237,6 @@ export function AppointmentForm() {
       setIsSubmitting(false)
     }
   }
-
-  // Generate time slots based on clinic settings
-  const generateTimeSlots = () => {
-    if (!clinicSettings) return []
-
-    const timeSlots = []
-    const { start, end } = clinicSettings.workHours
-
-    // Convert time strings to minutes for easier calculation
-    const startMinutes = Number.parseInt(start.split(":")[0]) * 60 + Number.parseInt(start.split(":")[1])
-    const endMinutes = Number.parseInt(end.split(":")[0]) * 60 + Number.parseInt(end.split(":")[1])
-
-    // Generate slots in 30-minute intervals
-    for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
-      const hour = Math.floor(minutes / 60)
-      const minute = minutes % 60
-      const timeString = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
-
-      // Skip lunch time if enabled
-      if (clinicSettings.lunchTime.enabled) {
-        const lunchStartMinutes =
-          Number.parseInt(clinicSettings.lunchTime.start.split(":")[0]) * 60 +
-          Number.parseInt(clinicSettings.lunchTime.start.split(":")[1])
-        const lunchEndMinutes =
-          Number.parseInt(clinicSettings.lunchTime.end.split(":")[0]) * 60 +
-          Number.parseInt(clinicSettings.lunchTime.end.split(":")[1])
-
-        if (minutes >= lunchStartMinutes && minutes < lunchEndMinutes) {
-          continue
-        }
-      }
-
-      timeSlots.push(timeString)
-    }
-
-    return timeSlots
-  }
-
-  const timeSlots = generateTimeSlots()
 
   if (isLoading) {
     return <div className="text-center py-10">{t("loading.form")}</div>
@@ -320,18 +335,56 @@ export function AppointmentForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("bookAppointment.time")}</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} value={field.value} disabled={!selectedDate || isLoadingTimeSlots}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder={t("bookAppointment.time.placeholder")} />
+                    <SelectValue
+                      placeholder={
+                        isLoadingTimeSlots
+                          ? t("bookAppointment.time.loading")
+                          : !selectedDate
+                            ? t("bookAppointment.time.selectDateFirst")
+                            : t("bookAppointment.time.placeholder")
+                      }
+                    />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {timeSlots.map((time) => (
-                    <SelectItem key={time} value={time}>
-                      {time}
-                    </SelectItem>
-                  ))}
+                  {isLoadingTimeSlots ? (
+                    <div className="flex items-center justify-center py-2">
+                      <Clock className="mr-2 h-4 w-4 animate-spin" />
+                      <span>{t("bookAppointment.time.loading")}</span>
+                    </div>
+                  ) : availableTimeSlots.length === 0 ? (
+                    <div className="p-2 text-center text-sm text-muted-foreground">
+                      {t("bookAppointment.time.noAvailableSlots")}
+                    </div>
+                  ) : (
+                    availableTimeSlots.map((slot) => (
+                      <SelectItem
+                        key={slot.time}
+                        value={slot.time}
+                        disabled={!slot.available}
+                        className={cn(!slot.available && "opacity-50 cursor-not-allowed")}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span>{slot.time}</span>
+                          {!slot.available && (
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              {t("bookAppointment.time.unavailable")}
+                            </Badge>
+                          )}
+                          {slot.available && slot.remainingSlots !== undefined && slot.remainingSlots <= 2 && (
+                            <Badge variant="secondary" className="ml-2 text-xs">
+                              {slot.remainingSlots === 1
+                                ? t("bookAppointment.time.lastSlot")
+                                : t("bookAppointment.time.fewSlotsLeft")}
+                            </Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <FormDescription>{t("bookAppointment.time.description")}</FormDescription>
@@ -378,7 +431,7 @@ export function AppointmentForm() {
           />
         )}
 
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting || !form.getValues("time")}>
           {isSubmitting ? t("bookAppointment.submitting") : t("bookAppointment.submit")}
         </Button>
       </form>
