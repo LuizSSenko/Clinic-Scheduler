@@ -1,6 +1,6 @@
 "use client"
 
-import React, { Suspense, useState, useCallback } from "react"
+import React, { Suspense, useState, useCallback, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { format, parseISO } from "date-fns"
 import { DeleteAppointmentButton } from "./delete-appointment-button"
@@ -22,6 +22,9 @@ interface AppointmentsTableProps {
 function AppointmentsTable({ appointments, selectedDate, onAppointmentDeleted }: AppointmentsTableProps) {
   const [expandedAppointment, setExpandedAppointment] = useState<string | null>(null)
   const { t } = useLanguage()
+
+  console.log("AppointmentsTable render - appointments:", appointments)
+  console.log("AppointmentsTable render - selectedDate:", selectedDate)
 
   // Filter appointments based on selected date
   const filteredAppointments = selectedDate
@@ -60,12 +63,20 @@ function AppointmentsTable({ appointments, selectedDate, onAppointmentDeleted }:
       })
     : appointments
 
+  console.log("AppointmentsTable - filtered appointments:", filteredAppointments)
+
   if (!filteredAppointments || filteredAppointments.length === 0) {
+    console.log("AppointmentsTable - no appointments to display")
     return (
       <div className="text-center py-10">
         <p className="text-muted-foreground">
           {selectedDate ? t("appointments.noAppointmentsForDate") : t("appointments.noAppointments")}
         </p>
+        {!selectedDate && appointments && appointments.length > 0 && (
+          <p className="text-sm text-muted-foreground mt-2">
+            Debug: Found {appointments.length} appointments but none are being displayed.
+          </p>
+        )}
       </div>
     )
   }
@@ -262,34 +273,74 @@ function AppointmentsTable({ appointments, selectedDate, onAppointmentDeleted }:
   )
 }
 
-export function AppointmentsList({ appointments: initialAppointments }: { appointments: Appointment[] }) {
-  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments || [])
+export function AppointmentsList({
+  appointments: initialAppointments,
+  onAppointmentDeleted,
+  onRefresh,
+}: {
+  appointments: Appointment[]
+  onAppointmentDeleted?: (id: string) => void
+  onRefresh?: () => void
+}) {
+  const [appointments, setAppointments] = useState<Appointment[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
   const { t } = useLanguage()
 
+  // Initialize appointments on component mount and when initialAppointments change
+  useEffect(() => {
+    console.log("AppointmentsList: initializing with appointments:", initialAppointments)
+    if (initialAppointments && Array.isArray(initialAppointments)) {
+      setAppointments(initialAppointments)
+    } else {
+      console.warn("AppointmentsList: initialAppointments is not a valid array:", initialAppointments)
+      setAppointments([])
+    }
+  }, [initialAppointments])
+
   // Refresh appointments data
   const refreshAppointments = useCallback(async () => {
+    console.log("AppointmentsList: refreshing appointments...")
     setIsLoading(true)
     try {
-      const freshAppointments = await getAppointments()
-      setAppointments(freshAppointments)
+      if (onRefresh) {
+        await onRefresh()
+      } else {
+        const freshAppointments = await getAppointments()
+        console.log("AppointmentsList: fresh appointments loaded:", freshAppointments)
+        setAppointments(freshAppointments)
+      }
     } catch (error) {
       console.error("Error refreshing appointments:", error)
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [onRefresh])
 
   // Update local state when an appointment is deleted
-  const handleAppointmentDeleted = useCallback((id: string) => {
-    console.log(`Handling appointment deletion for ID: ${id}`)
-    setAppointments((prevAppointments) => {
-      const filtered = prevAppointments.filter((appointment) => appointment.id !== id)
-      console.log(`Filtered appointments: ${filtered.length} (was ${prevAppointments.length})`)
-      return filtered
-    })
-  }, [])
+  const handleAppointmentDeleted = useCallback(
+    (id: string) => {
+      console.log(`AppointmentsList: Handling appointment deletion for ID: ${id}`)
+
+      // Update local state immediately
+      setAppointments((prevAppointments) => {
+        const filtered = prevAppointments.filter((appointment) => appointment.id !== id)
+        console.log(`AppointmentsList: Filtered appointments: ${filtered.length} (was ${prevAppointments.length})`)
+        return filtered
+      })
+
+      // Notify parent component
+      if (onAppointmentDeleted) {
+        console.log("AppointmentsList: Notifying parent of deletion")
+        onAppointmentDeleted(id)
+      }
+    },
+    [onAppointmentDeleted],
+  )
+
+  // Debug logging
+  console.log("AppointmentsList render - appointments count:", appointments.length)
+  console.log("AppointmentsList render - appointments data:", appointments)
 
   let title = t("appointments.allAppointments")
   if (selectedDate && selectedDate instanceof Date && !isNaN(selectedDate.getTime())) {

@@ -59,12 +59,22 @@ export function ClinicSettingsForm() {
           lunchTimeEnd: settings.lunchTime.end,
           maxConcurrentAppointments: settings.maxConcurrentAppointments,
         })
+        console.log("Loaded clinic settings for form:", settings)
       } catch (error) {
         console.error("Failed to load clinic settings:", error)
+        // Use default values if loading fails
+        form.reset({
+          workHoursStart: "09:00",
+          workHoursEnd: "17:00",
+          lunchTimeEnabled: true,
+          lunchTimeStart: "12:00",
+          lunchTimeEnd: "13:00",
+          maxConcurrentAppointments: 1,
+        })
         toast({
           variant: "destructive",
-          title: "Error",
-          description: "Failed to load clinic settings.",
+          title: "Warning",
+          description: "Failed to load clinic settings. Using default values.",
         })
       } finally {
         setIsLoading(false)

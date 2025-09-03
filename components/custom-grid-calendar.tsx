@@ -14,6 +14,7 @@ import {
   eachDayOfInterval,
   isSameDay,
   isBefore,
+  isToday,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { useLanguage } from "@/lib/language-context"
@@ -150,10 +151,10 @@ export function CustomGridCalendar({ appointmentCounts, onDateSelect, selectedDa
                   <Button
                     variant={selectedDate && isSameDay(selectedDate, day) ? "default" : "ghost"}
                     className={`relative w-full h-full rounded-md flex items-center justify-center p-0 ${
-                      isBefore(day, today) ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
+                      isBefore(day, today) && !isToday(day) ? "opacity-50 cursor-not-allowed" : ""
+                    } ${isToday(day) ? "border border-primary" : ""}`}
                     onClick={() => handleDateClick(day)}
-                    disabled={isBefore(day, today)}
+                    disabled={isBefore(day, today) && !isToday(day)}
                   >
                     <span>{day.getDate()}</span>
                     {appointmentCounts[formatDateToYYYYMMDD(day)] && (

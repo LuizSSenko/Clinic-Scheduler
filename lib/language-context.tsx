@@ -32,7 +32,10 @@ const enTranslations = {
   "bookAppointment.time.placeholder": "Select a time slot",
   "bookAppointment.time.selectDateFirst": "Select a date first",
   "bookAppointment.time.loading": "Loading available times...",
-  "bookAppointment.time.noAvailableSlots": "No available time slots for this date",
+  "bookAppointment.time.noAvailableSlotsTitle": "No Available Time Slots",
+  "bookAppointment.time.noAvailableSlotsDescription":
+    "There are no available time slots for the selected date. Please select another date or try again later.",
+  "bookAppointment.time.noAvailableSlots": "No available time slots",
   "bookAppointment.time.unavailable": "Unavailable",
   "bookAppointment.time.lastSlot": "Last slot",
   "bookAppointment.time.fewSlotsLeft": "Few slots left",
@@ -155,7 +158,10 @@ const ptBRTranslations = {
   "bookAppointment.time.placeholder": "Selecione um horário",
   "bookAppointment.time.selectDateFirst": "Selecione uma data primeiro",
   "bookAppointment.time.loading": "Carregando horários disponíveis...",
-  "bookAppointment.time.noAvailableSlots": "Não há horários disponíveis para esta data",
+  "bookAppointment.time.noAvailableSlotsTitle": "Sem Horários Disponíveis",
+  "bookAppointment.time.noAvailableSlotsDescription":
+    "Não há horários disponíveis para a data selecionada. Por favor, selecione outra data ou tente novamente mais tarde.",
+  "bookAppointment.time.noAvailableSlots": "Sem horários disponíveis",
   "bookAppointment.time.unavailable": "Indisponível",
   "bookAppointment.time.lastSlot": "Último horário",
   "bookAppointment.time.fewSlotsLeft": "Poucos horários restantes",

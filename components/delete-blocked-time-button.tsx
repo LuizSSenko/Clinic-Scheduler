@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { Trash2 } from "lucide-react"
+import type React from "react"
+
+import { useState, useEffect } from "react"
+import { Trash2, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -28,27 +30,58 @@ export function DeleteBlockedTimeButton({ id, onDelete }: DeleteBlockedTimeButto
   const [isOpen, setIsOpen] = useState(false)
   const router = useRouter()
 
-  async function handleDelete() {
+  // Reset states when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsDeleting(false)
+    }
+  }, [isOpen])
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (isDeleting) {
+      console.log("Delete already in progress, ignoring click")
+      return
+    }
+
     setIsDeleting(true)
+    console.log(`Starting delete process for blocked time ID: ${id}`)
 
     try {
       const result = await deleteBlockedTime(id)
+      console.log("Delete result:", result)
 
-      // Call the onDelete callback to update the parent component's state
-      if (onDelete) {
-        onDelete()
+      if (result.success) {
+        // Call the onDelete callback to update the parent component's state
+        if (onDelete) {
+          console.log("Calling onDelete callback")
+          onDelete()
+        }
+
+        toast({
+          title: "Success",
+          description: result.message,
+        })
+
+        // Force close the dialog and reset state
+        setIsDeleting(false)
+        setIsOpen(false)
+
+        // Refresh the router cache after a short delay
+        setTimeout(() => {
+          router.refresh()
+        }, 500)
+      } else {
+        console.error("Delete failed:", result.message)
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.message || "Failed to delete blocked time",
+        })
+        setIsDeleting(false)
       }
-
-      toast({
-        title: "Success",
-        description: result.message,
-      })
-
-      // Close the dialog
-      setIsOpen(false)
-
-      // Refresh the router cache
-      router.refresh()
     } catch (error) {
       console.error("Error deleting blocked time:", error)
       toast({
@@ -56,29 +89,38 @@ export function DeleteBlockedTimeButton({ id, onDelete }: DeleteBlockedTimeButto
         title: "Error",
         description: "Failed to delete blocked time. Please try again.",
       })
-    } finally {
       setIsDeleting(false)
     }
   }
 
   const handleOpenChange = (open: boolean) => {
-    if (!isDeleting) {
-      setIsOpen(open)
+    console.log("Dialog open change:", open, "isDeleting:", isDeleting)
+    setIsOpen(open)
+
+    // If dialog is being closed and we're not deleting, reset the deleting state
+    if (!open && !isDeleting) {
+      setIsDeleting(false)
     }
+  }
+
+  const handleButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!isDeleting) {
+      setIsOpen(true)
+    }
+  }
+
+  const handleCancel = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsOpen(false)
+    setIsDeleting(false)
   }
 
   return (
     <AlertDialog open={isOpen} onOpenChange={handleOpenChange}>
       <AlertDialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={(e) => {
-            e.stopPropagation()
-            setIsOpen(true)
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
+        <Button variant="ghost" size="icon" onClick={handleButtonClick} disabled={isDeleting}>
+          {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
           <span className="sr-only">Delete blocked time</span>
         </Button>
       </AlertDialogTrigger>
@@ -90,15 +132,18 @@ export function DeleteBlockedTimeButton({ id, onDelete }: DeleteBlockedTimeButto
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={(e) => {
-              e.stopPropagation()
-              handleDelete()
-            }}
-            disabled={isDeleting}
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
+          <AlertDialogCancel onClick={handleCancel} disabled={isDeleting}>
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+            {isDeleting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              "Delete"
+            )}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

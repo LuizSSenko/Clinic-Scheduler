@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { format, addHours } from "date-fns"
-import { CalendarIcon, Clock } from "lucide-react"
+import { CalendarIcon, Clock, AlertCircle } from "lucide-react"
 import { useLanguage } from "@/lib/language-context"
 
 import { cn } from "@/lib/utils"
@@ -22,6 +22,7 @@ import { createAppointment, getClinicSettings, getAvailableTimeSlots } from "@/l
 import type { ClinicSettings, TimeSlot } from "@/lib/types"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 // Update the form schema to make emergencyReason optional and handle it properly
 const formSchema = z.object({
@@ -54,6 +55,7 @@ export function AppointmentForm() {
   const [submissionComplete, setSubmissionComplete] = useState(false)
   const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([])
   const [isLoadingTimeSlots, setIsLoadingTimeSlots] = useState(false)
+  const [noTimeSlotsAvailable, setNoTimeSlotsAvailable] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -73,12 +75,27 @@ export function AppointmentForm() {
       try {
         const settings = await getClinicSettings()
         setClinicSettings(settings)
+        console.log("Loaded clinic settings:", settings)
       } catch (error) {
         console.error("Failed to load clinic settings:", error)
+        // Set default settings as fallback
+        const defaultSettings = {
+          workHours: {
+            start: "09:00",
+            end: "17:00",
+          },
+          lunchTime: {
+            enabled: true,
+            start: "12:00",
+            end: "13:00",
+          },
+          maxConcurrentAppointments: 1,
+        }
+        setClinicSettings(defaultSettings)
         toast({
           variant: "destructive",
-          title: "Error",
-          description: "Failed to load clinic settings.",
+          title: "Warning",
+          description: "Using default clinic settings. Please check your configuration.",
         })
       } finally {
         setIsLoading(false)
@@ -94,14 +111,21 @@ export function AppointmentForm() {
       if (!selectedDate) return
 
       setIsLoadingTimeSlots(true)
+      setNoTimeSlotsAvailable(false)
+
       try {
         const formattedDate = format(selectedDate, "yyyy-MM-dd")
         const slots = await getAvailableTimeSlots(formattedDate)
         setAvailableTimeSlots(slots)
 
+        // Check if there are no available slots
+        if (slots.length === 0) {
+          setNoTimeSlotsAvailable(true)
+        }
+
         // Reset time selection if the previously selected time is no longer available
         const currentTime = form.getValues("time")
-        if (currentTime && !slots.some((slot) => slot.time === currentTime && slot.available)) {
+        if (currentTime && !slots.some((slot) => slot.time === currentTime)) {
           form.setValue("time", "")
         }
       } catch (error) {
@@ -157,7 +181,7 @@ export function AppointmentForm() {
     }
 
     // Check if the selected time slot is still available
-    const isTimeSlotAvailable = availableTimeSlots.some((slot) => slot.time === values.time && slot.available)
+    const isTimeSlotAvailable = availableTimeSlots.some((slot) => slot.time === values.time)
 
     if (!isTimeSlotAvailable) {
       toast({
@@ -165,6 +189,12 @@ export function AppointmentForm() {
         title: "Error",
         description: "This time slot is no longer available. Please select another time.",
       })
+
+      // Refresh available time slots
+      const formattedDate = format(values.date, "yyyy-MM-dd")
+      const slots = await getAvailableTimeSlots(formattedDate)
+      setAvailableTimeSlots(slots)
+
       return
     }
 
@@ -329,13 +359,25 @@ export function AppointmentForm() {
           )}
         />
 
+        {selectedDate && noTimeSlotsAvailable && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>{t("bookAppointment.time.noAvailableSlotsTitle")}</AlertTitle>
+            <AlertDescription>{t("bookAppointment.time.noAvailableSlotsDescription")}</AlertDescription>
+          </Alert>
+        )}
+
         <FormField
           control={form.control}
           name="time"
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("bookAppointment.time")}</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value} disabled={!selectedDate || isLoadingTimeSlots}>
+              <Select
+                onValueChange={field.onChange}
+                value={field.value}
+                disabled={!selectedDate || isLoadingTimeSlots || noTimeSlotsAvailable}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue
@@ -344,7 +386,9 @@ export function AppointmentForm() {
                           ? t("bookAppointment.time.loading")
                           : !selectedDate
                             ? t("bookAppointment.time.selectDateFirst")
-                            : t("bookAppointment.time.placeholder")
+                            : noTimeSlotsAvailable
+                              ? t("bookAppointment.time.noAvailableSlots")
+                              : t("bookAppointment.time.placeholder")
                       }
                     />
                   </SelectTrigger>
@@ -361,20 +405,10 @@ export function AppointmentForm() {
                     </div>
                   ) : (
                     availableTimeSlots.map((slot) => (
-                      <SelectItem
-                        key={slot.time}
-                        value={slot.time}
-                        disabled={!slot.available}
-                        className={cn(!slot.available && "opacity-50 cursor-not-allowed")}
-                      >
+                      <SelectItem key={slot.time} value={slot.time}>
                         <div className="flex items-center justify-between w-full">
                           <span>{slot.time}</span>
-                          {!slot.available && (
-                            <Badge variant="outline" className="ml-2 text-xs">
-                              {t("bookAppointment.time.unavailable")}
-                            </Badge>
-                          )}
-                          {slot.available && slot.remainingSlots !== undefined && slot.remainingSlots <= 2 && (
+                          {slot.remainingSlots !== undefined && slot.remainingSlots <= 2 && (
                             <Badge variant="secondary" className="ml-2 text-xs">
                               {slot.remainingSlots === 1
                                 ? t("bookAppointment.time.lastSlot")
@@ -431,7 +465,7 @@ export function AppointmentForm() {
           />
         )}
 
-        <Button type="submit" disabled={isSubmitting || !form.getValues("time")}>
+        <Button type="submit" disabled={isSubmitting || !form.getValues("time") || noTimeSlotsAvailable}>
           {isSubmitting ? t("bookAppointment.submitting") : t("bookAppointment.submit")}
         </Button>
       </form>
