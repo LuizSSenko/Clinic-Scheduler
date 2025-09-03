@@ -7,7 +7,7 @@
 
 Um sistema moderno e completo de agendamento de consultas para clínicas de saúde, construído com Next.js e React.
 
-## Descrição do Projeto
+## Descrição do Projeto 
 
 Clinic Scheduler é uma aplicação web completa projetada para otimizar o processo de agendamento de consultas em clínicas de saúde. Ela oferece uma interface intuitiva para os pacientes marcarem consultas e um painel administrativo poderoso para a equipe da clínica gerenciar agendamentos, bloquear períodos e configurar as definições da clínica.
 
