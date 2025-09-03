@@ -6,8 +6,8 @@ import { v4 as uuidv4 } from "uuid"
 import type { ClinicSettings, Appointment, BlockedTime, TimeSlot } from "./types"
 import { parseISO, isBefore, addHours } from "date-fns"
 
-// Import the email service
-import { sendAppointmentConfirmationEmail } from "./email-service"
+// Import the email service - COMMENTED OUT FOR NOW
+// import { sendAppointmentConfirmationEmail } from "./email-service"
 
 // Schema definitions
 const AppointmentSchema = z.object({
@@ -520,13 +520,13 @@ export async function createAppointment(formData: FormData) {
 
     console.log("Appointment added successfully")
 
-    // Send confirmation email
-    try {
-      await sendAppointmentConfirmationEmail(newAppointment, language)
-      console.log(`Confirmation email sent to ${userEmail} in ${language}`)
-    } catch (emailError) {
-      console.error("Failed to send confirmation email:", emailError)
-    }
+    // COMMENTED OUT: Send confirmation email
+    // try {
+    //   await sendAppointmentConfirmationEmail(newAppointment, language)
+    //   console.log(`Confirmation email sent to ${userEmail} in ${language}`)
+    // } catch (emailError) {
+    //   console.error("Failed to send confirmation email:", emailError)
+    // }
 
     revalidatePath("/")
     revalidatePath("/admin")
@@ -865,7 +865,7 @@ export async function deleteAppointment(id: string) {
     console.error("Error in deleteAppointment:", error)
     return {
       success: false,
-      message: `Failed to delete appointment: ${error.message}. Please try again.`,
+      message: `Failed to delete appointment: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`,
     }
   }
 }
@@ -958,7 +958,7 @@ export async function deleteBlockedTime(id: string) {
     console.error("Error in deleteBlockedTime:", error)
     return {
       success: false,
-      message: `Failed to delete blocked time: ${error.message}. Please try again.`,
+      message: `Failed to delete blocked time: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`,
     }
   }
 }

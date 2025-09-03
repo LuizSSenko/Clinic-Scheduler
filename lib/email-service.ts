@@ -5,9 +5,10 @@ import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 // Mailgun API key from your environment variables
-const MAILGUN_API_KEY = "0976bffc6bf053d33de9232fbb8b6031-e71583bb-54547a9d"
-const MAILGUN_DOMAIN = "sandboxff91bb118e44489189aa415e8c24f0e2.mailgun.org"
-const MAILGUN_FROM = "Clinic Scheduler <postmaster@sandboxff91bb118e44489189aa415e8c24f0e2.mailgun.org>"
+const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY || "0976bffc6bf053d33de9232fbb8b6031-e71583bb-54547a9d"
+const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN || "sandboxff91bb118e44489189aa415e8c24f0e2.mailgun.org"
+const MAILGUN_FROM =
+  process.env.MAILGUN_FROM || "Clinic Scheduler <postmaster@sandboxff91bb118e44489189aa415e8c24f0e2.mailgun.org>"
 
 interface EmailTemplates {
   subject: {
@@ -146,6 +147,9 @@ export async function sendAppointmentConfirmationEmail(appointment: Appointment,
     return { success: true, message: "Email sent successfully" }
   } catch (error) {
     console.error("Error sending confirmation email:", error)
-    return { success: false, message: `Error sending email: ${error.message}` }
+    return {
+      success: false,
+      message: `Error sending email: ${error instanceof Error ? error.message : "Unknown error"}`,
+    }
   }
 }

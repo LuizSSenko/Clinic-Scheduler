@@ -31,7 +31,7 @@ export default function VerifyDatabasePage() {
     } catch (error) {
       setStatus({
         success: false,
-        message: `Connection error: ${error.message}`,
+        message: `Connection error: ${error instanceof Error ? error.message : "Unknown error"}`,
       })
     } finally {
       setIsLoading(false)
@@ -162,21 +162,15 @@ export default function VerifyDatabasePage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span>KV_REST_API_URL:</span>
-                <Badge variant={process.env.KV_REST_API_URL ? "default" : "destructive"}>
-                  {process.env.KV_REST_API_URL ? "Set" : "Missing"}
-                </Badge>
+                <Badge variant="outline">Check Server</Badge>
               </div>
               <div className="flex justify-between">
                 <span>KV_REST_API_TOKEN:</span>
-                <Badge variant={process.env.KV_REST_API_TOKEN ? "default" : "destructive"}>
-                  {process.env.KV_REST_API_TOKEN ? "Set" : "Missing"}
-                </Badge>
+                <Badge variant="outline">Check Server</Badge>
               </div>
               <div className="flex justify-between">
                 <span>KV_REST_API_READ_ONLY_TOKEN:</span>
-                <Badge variant={process.env.KV_REST_API_READ_ONLY_TOKEN ? "default" : "destructive"}>
-                  {process.env.KV_REST_API_READ_ONLY_TOKEN ? "Set" : "Missing"}
-                </Badge>
+                <Badge variant="outline">Check Server</Badge>
               </div>
             </div>
           </CardContent>
